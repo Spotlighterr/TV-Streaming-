@@ -14,7 +14,9 @@ services:
       - SELKIES_MANUAL_WIDTH=1920
       - SELKIES_MANUAL_HEIGHT=1080
       - SELKIES_IS_MANUAL_RESOLUTION_MODE=true
-      - CHROME_CLI=--enable-low-end-device-mode --ignore-gpu-blocklist --enable-gpu-rasterization --enable-zero-copy --num-raster-threads=4 --enable-features=VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization
+      - SELKIES_VIDEO_BITRATE=25
+      - SELKIES_H264_CRF=20
+      - CHROME_CLI=--ignore-gpu-blocklist --enable-gpu-rasterization --enable-zero-copy --num-raster-threads=4 --enable-features=VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization --disable-features=UseChromeOSDirectVideoDecoder --autoplay-policy=no-user-gesture-required
     devices:
       - /dev/dri:/dev/dri
     volumes:

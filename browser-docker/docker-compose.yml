@@ -14,11 +14,12 @@ services:
       - SELKIES_MANUAL_WIDTH=1920
       - SELKIES_MANUAL_HEIGHT=1080
       - SELKIES_IS_MANUAL_RESOLUTION_MODE=true
-      - CHROME_CLI=--disable-smooth-scrolling --force-prefers-reduced-motion --enable-low-end-device-mode --ignore-gpu-blocklist --enable-gpu-rasterization --enable-zero-copy --num-raster-threads=4 --enable-features=VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization
+      - CHROME_CLI=--enable-low-end-device-mode --ignore-gpu-blocklist --enable-gpu-rasterization --enable-zero-copy --num-raster-threads=4 --enable-features=VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization
     devices:
       - /dev/dri:/dev/dri
     volumes:
       - ./config:/config
+      - ./config/custom-cont-init.d:/custom-cont-init.d:ro
     ports:
       - 8085:3000
       - 8086:3001

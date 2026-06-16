@@ -11,8 +11,8 @@ services:
       - TITLE=Docker Chromium
       - SELKIES_FRAMERATE=60
       - LIBVA_DRIVER_NAME=iHD
-      - SELKIES_MANUAL_WIDTH=1280
-      - SELKIES_MANUAL_HEIGHT=720
+      - SELKIES_MANUAL_WIDTH=1920
+      - SELKIES_MANUAL_HEIGHT=1080
       - SELKIES_IS_MANUAL_RESOLUTION_MODE=true
       - CHROME_CLI=--disable-smooth-scrolling --force-prefers-reduced-motion --enable-low-end-device-mode --ignore-gpu-blocklist --enable-gpu-rasterization --enable-zero-copy --num-raster-threads=4 --enable-features=VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization
     devices:

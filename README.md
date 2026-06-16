@@ -1,37 +1,27 @@
-# TV Streaming (MPEG-TS over HTTP Relay Server)
+# Hệ Thống TV Streaming & Trình Duyệt Ảo Docker
 
-Dự án này cung cấp giải pháp truyền hình trực tuyến (Live TV Streaming) siêu nhẹ và ổn định, chuyển tiếp luồng video định dạng **MPEG-TS** qua giao thức HTTP. Dự án được tối ưu hóa đặc biệt cho các thiết bị Smart TV WebKit đời cũ (vốn quen thuộc với định dạng truyền hình truyền thống MPEG-TS và không yêu cầu file danh sách playlist phức tạp như HLS/DASH).
-
-Hệ thống tích hợp công nghệ **tăng tốc phần cứng bằng GPU Intel (VA-API)** bên trong môi trường Docker Container để giảm thiểu tải CPU khi thực hiện xử lý video thực tế.
+Dự án này tích hợp 2 giải pháp truyền tải hình ảnh/video hiệu năng cao sử dụng công nghệ tăng tốc phần cứng bằng GPU Intel (VA-API) trên máy chủ Ubuntu Server.
 
 ---
 
-## 🚀 Các Tính Năng Nổi Bật
+# 📺 PHẦN 1: TV Streaming (MPEG-TS over HTTP Relay Server)
 
+Dự án này cung cấp giải pháp truyền hình trực tuyến (Live TV Streaming) siêu nhẹ và ổn định, chuyển tiếp luồng video định dạng **MPEG-TS** qua giao thức HTTP. Dự án được tối ưu hóa đặc biệt cho các thiết bị Smart TV WebKit đời cũ (vốn quen thuộc với định dạng truyền hình truyền thống MPEG-TS và không yêu cầu file danh sách playlist phức tạp như HLS/DASH).
+
+## 🚀 Các Tính Năng Nổi Bật
 1. **Một Luồng Duy Nhất (Single Stream)**: Audio và Video kết hợp (multiplexed) trong một luồng MPEG-TS duy nhất truyền qua HTTP, loại bỏ độ trễ và lỗi tải tệp playlist `.m3u8` của HLS.
 2. **Instant Playback (Bộ đệm 2MB)**: Server tích hợp bộ đệm vòng (Ring Buffer) 2MB tự động lưu trữ các gói dữ liệu mới nhất (gồm thông tin PAT/PMT đầu luồng), giúp thiết bị của người xem kết nối sau có thể phân tích giải mã và phát video ngay lập tức mà không phải chờ đợi.
 3. **Intel GPU Acceleration (VA-API)**: Hỗ trợ đầy đủ việc giải mã và mã hóa bằng GPU Intel Onboard (như Intel UHD 520) thông qua VA-API, giải phóng CPU của máy chủ (CPU usage giảm xuống dưới 5%).
 4. **Tự Động Fallback**: Script stream tự động dò tìm GPU Intel, nếu không khả dụng sẽ tự động chuyển đổi sang mã hóa phần mềm bằng CPU (`libx264`).
 
----
-
-## 🛠️ Yêu Cầu Hệ Thống
-
-* **Docker & Docker Compose** đã được cài đặt.
-* (Tùy chọn) Máy chủ chạy hệ điều hành Linux có card đồ họa Intel onboard (thiết bị khả dụng tại `/dev/dri/renderD128`) để kích hoạt tăng tốc phần cứng.
-
----
-
 ## 📦 Hướng Dẫn Cài Đặt & Chạy Server
-
-### 1. Khởi động Relay Server bằng Docker
 Tại thư mục gốc của dự án, chạy lệnh:
 ```bash
 docker compose up --build -d
 ```
 Server sẽ được dựng và chạy ngầm, lắng nghe trên cổng **`8000`**.
 
-### 2. Kiểm tra trạng thái hoạt động
+### Kiểm tra trạng thái hoạt động
 Mở trình duyệt và truy cập:
 👉 `http://<server-ip>:8000/`
 
@@ -42,14 +32,10 @@ Bạn sẽ nhận được danh sách JSON các kênh đang phát trực tuyến
 }
 ```
 
----
-
 ## 📹 Hướng Dẫn Phát Luồng Video (Streamer Source)
-
 Chúng ta có 2 kịch bản phát thử nghiệm chạy trực tiếp bên trong container để kiểm thử nhanh hiệu năng GPU:
 
 ### Kịch bản 1: Phát luồng thử nghiệm (Test Pattern)
-Luồng này tự tạo bảng màu động và tiếng bíp liên tục, thích hợp để kiểm thử kết nối mạng:
 ```bash
 docker exec -d tv-streaming-server /app/start-test-stream.sh http://localhost:8000/feed/test
 ```
@@ -57,27 +43,50 @@ docker exec -d tv-streaming-server /app/start-test-stream.sh http://localhost:80
 
 ### Kịch bản 2: Phát lặp lại một file video (Loop File)
 1. Copy file video của bạn vào thư mục `videos/` trong dự án và đổi tên thành `input.mp4`.
-2. Khởi chạy script để GPU tự động giải mã và mã hóa phát lặp lại vô tận:
+2. Khởi chạy script:
    ```bash
    docker exec -d tv-streaming-server /app/start-file-stream.sh /app/videos/input.mp4 http://localhost:8000/feed/vtv1
    ```
 *Xem trực tiếp kênh này tại:* `http://<server-ip>:8000/live/vtv1`
 
+## 📺 Hướng Dẫn Xem Trực Tiếp (Client Player)
+* **VLC Media Player**: Mở VLC -> Nhấn `Ctrl + N` -> Nhập địa chỉ: `http://<server-ip>:8000/live/test` -> Chọn **Play**.
+* **Smart TV**: Nhúng luồng vào thẻ `<video>` chuẩn HTML5:
+  ```html
+  <video width="1280" height="720" controls autoplay>
+    <source src="http://<server-ip>:8000/live/test" type="video/mp2t">
+  </video>
+  ```
+
 ---
 
-## 📺 Hướng Dẫn Xem Trực Tiếp (Client Player)
+# 🌐 PHẦN 2: Docker Chromium (Virtual Browser Streaming Server)
 
-### 1. Xem qua VLC Media Player (Khuyên dùng trên PC)
-* Mở VLC.
-* Nhấn `Ctrl + N` (Open Network Stream).
-* Nhập địa chỉ: `http://<server-ip>:8000/live/test` (hoặc tên kênh tương ứng).
-* Nhấn **Play**.
+Giải pháp chạy trình duyệt ảo Chromium đầy đủ chức năng bên trong Docker Container trên Server, truyền phát giao diện thời gian thực qua giao thức WebRTC (sử dụng công nghệ Selkies/KasmVNC) mượt mà ở tốc độ 60 FPS, độ phân giải sắc nét và hỗ trợ đầy đủ truyền dẫn âm thanh.
 
-### 2. Xem trên Smart TV / WebKit cũ
-Nhúng luồng trực tiếp bằng thẻ `<video>` chuẩn HTML5 (nếu trình duyệt TV hỗ trợ giải mã phần cứng MPEG-TS):
-```html
-<video width="1280" height="720" controls autoplay>
-  <source src="http://<server-ip>:8000/live/test" type="video/mp2t">
-  Trình duyệt TV không hỗ trợ phát trực tiếp MPEG-TS.
-</video>
+## 🚀 Các Tính Năng Nổi Bật & Tối Ưu Hóa
+1. **GPU Hardware Encoding (Zero-Copy VA-API)**: 
+   * Tự động cài đặt driver **`intel-media-va-driver-non-free`** khi container khởi động thông qua custom script ở `/custom-cont-init.d`.
+   * Cho phép GPU của Server tự nén luồng WebRTC trực tiếp từ bộ nhớ đồ họa (**Zero-Copy**), giảm tải CPU từ 100% xuống dưới 2%.
+2. **Khóa cứng độ phân giải Full HD (`1920x1080` @ 60 FPS)**: Đảm bảo độ nét tối đa khi đọc chữ và chơi video trên màn hình lớn, đồng thời đồng bộ hóa tỷ lệ điểm ảnh với bộ mã hóa GPU để ngăn lỗi giải mã.
+3. **Tối ưu hóa băng thông LAN**: Tăng băng thông mặc định lên **25 Mbps** (`SELKIES_VIDEO_BITRATE=25`) và chỉnh CRF thành **20** (`SELKIES_H264_CRF=20`) giúp video chuyển động nhanh không bị vỡ hạt (pixelated).
+4. **Tăng tốc Chromium**: Cấu hình các cờ tăng tốc phần cứng giải mã video (`VaapiVideoDecoder`) và cho phép cuộn mượt (smooth scroll) ở chất lượng cao khi đi qua mạng LAN.
+
+## 📦 Hướng Dẫn Cài Đặt & Chạy Trình Duyệt Ảo
+Di chuyển vào thư mục `browser-docker/` của dự án và chạy:
+```bash
+cd browser-docker
+docker compose up -d
 ```
+Container trình duyệt sẽ khởi động và tự động cài đặt driver non-free trong vài giây.
+
+## 🔗 Các Cổng Kết Nối & Truy Cập
+Hệ thống mở 2 cổng kết nối chính trên Server:
+* **Cổng HTTP (3000/8085)**: `http://<server-ip>:8085` (Chỉ dùng để cấu hình hoặc xem tĩnh).
+* **Cổng HTTPS (3001/8086) - Bắt buộc dùng**: 👉 **`https://<server-ip>:8086`**
+  * *Lưu ý*: Vì trình duyệt Chromium yêu cầu kết nối bảo mật (HTTPS) để sử dụng âm thanh (Audio) và các chức năng ngoại vi, bạn **phải sử dụng đường dẫn HTTPS**. 
+  * Khi trình duyệt hiển thị cảnh báo *"Kết nối không riêng tư"* do chứng chỉ tự ký (Self-signed Certificate), chỉ cần nhấn **Nâng cao (Advanced) -> Tiếp tục truy cập (Proceed to...)** là sử dụng bình thường.
+
+## ⚠️ Lưu ý quan trọng về mạng truyền dẫn
+* Tránh sử dụng Tailscale qua máy chủ trung gian (Relay/DERP) vì băng thông bị bóp dưới 4 Mbps sẽ gây giật lag.
+* Hãy kết nối thiết bị của bạn chung router Wi-Fi với server (nhận IP dải `192.168.1.x`) để đi trực tiếp qua mạng LAN tốc độ cao (100 - 1000 Mbps) giúp stream mượt mà nhất.

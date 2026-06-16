@@ -90,3 +90,32 @@ Khi FFmpeg dừng đẩy luồng, server cần giải phóng tất cả tài ngu
 ### C. Ngăn chặn tràn bộ đệm ghi (Backpressure)
 Trong trường hợp client có kết nối mạng quá chậm, không kịp tiêu thụ dữ liệu nhị phân gửi đến, Node.js sẽ lưu các chunk này vào hàng đợi ghi (writable buffer) trong RAM. 
 * Hệ thống sử dụng cơ chế bảo vệ khối `try-catch` khi ghi dữ liệu. Nếu client xảy ra lỗi ghi hoặc mất kết nối ngầm, client đó sẽ lập tức bị loại khỏi danh sách phát sóng để tránh phình to hàng đợi ghi trong RAM của server.
+
+---
+
+## 4. Tối Ưu Hóa & Cấu Hình Docker Chromium (Browser Stream Optimization)
+
+Ghi nhận phiên làm việc ngày **16/06/2026** về việc thiết lập và tối ưu hóa hệ thống trình duyệt ảo Docker Chromium (Selkies/KasmVNC) chạy trên Ubuntu Server `ubuntuserver01`.
+
+### A. Kích Hoạt GPU Hardware Acceleration (VA-API Zero-Copy)
+* **Vấn đề**: Trình duyệt ảo mặc định sử dụng gói driver `intel-media-va-driver` (bản DFSG - Free), không hỗ trợ tính năng mã hóa phần cứng H.264 khiến hệ thống bị ép chạy mã hóa bằng CPU, gây giật lag và hao tổn RAM/CPU cực lớn.
+* **Giải pháp**: 
+  1. Tạo script khởi động tự động `/config/custom-cont-init.d/install-nonfree-drivers.sh` để tự động cài đặt driver bản đầy đủ: `intel-media-va-driver-non-free`.
+  2. Bổ sung cấu hình volume trong `docker-compose.yml` để kích hoạt script khởi động:
+     ```yaml
+     volumes:
+       - ./config:/config
+       - ./config/custom-cont-init.d:/custom-cont-init.d:ro
+     ```
+* **Kết quả**: GPU Intel HD Graphics đảm nhận toàn bộ việc nén luồng WebRTC trực tiếp từ bộ nhớ đồ họa (**Zero-Copy**), giảm tải CPU về 0-2%.
+
+### B. Thiết Lập Độ Phân Giải & Băng Thông LAN (1080p 60fps)
+* **Khóa cứng độ phân giải Full HD**: Thiết lập `SELKIES_MANUAL_WIDTH=1920`, `SELKIES_MANUAL_HEIGHT=1080` và `SELKIES_IS_MANUAL_RESOLUTION_MODE=true` để tránh crash bộ mã hóa phần cứng do các độ phân giải co giãn không chuẩn của client.
+* **Tối ưu băng thông WebRTC**: 
+  * `SELKIES_VIDEO_BITRATE=25` (25 Mbps) và `SELKIES_H264_CRF=20` để luồng truyền tải video mượt mà, không bị vỡ hạt trên mạng LAN.
+  * Tối ưu hóa Chromium flags thông qua `CHROME_CLI` để tự động kích hoạt GPU decoding (`VaapiVideoDecoder`) và tắt giới hạn chuyển động cho cuộn mượt (smooth scroll).
+
+### C. Kết Quả Đo Tốc Độ Mạng (iperf3)
+* **Mạng LAN (`192.168.1.218`)**: Bị timeout do máy Windows Client (`10.16.237.146`) và Server (`192.168.1.218`) nằm ở 2 dải mạng/router khác nhau.
+* **Mạng Tailscale (`100.80.180.36`)**: Kết nối thành công nhưng băng thông bị nghẽn ở mức **3.56 Mbps** do kết nối bị chuyển hướng qua **Tailscale Relay (DERP)** thay vì kết nối P2P trực tiếp.
+* **Giải pháp**: Cần kết nối máy Windows chung một cục router Wi-Fi với server để có IP `192.168.1.x`, giúp truyền dữ liệu trực tiếp LAN cực kỳ mượt mà.

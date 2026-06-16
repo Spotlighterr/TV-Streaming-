@@ -1,121 +1,49 @@
-# Tài Liệu Quản Lý Bộ Nhớ (Memory Management & Optimization)
+# 🧠 Bộ Nhớ Dự Án & Tiến Độ Công Việc (TV-Streaming Memory)
 
-Tài liệu này giải thích chi tiết kiến trúc quản lý tài nguyên bộ nhớ (RAM) của Node.js MPEG-TS Relay Server, nhằm đảm bảo hệ thống có thể chạy liên tục 24/7 trên các máy chủ có cấu hình RAM hạn chế mà không bị rò rỉ bộ nhớ (memory leak).
-
----
-
-## 1. Kiến Trúc Lưu Trữ & Phân Phối Luồng
-
-Server hoạt động trên mô hình luồng bất đồng bộ (Asynchronous Streams). Dữ liệu dạng binary chunk nhận được từ kết nối POST của FFmpeg được phân phối trực tiếp đến các client đang xem thông qua các Socket ghi (Write Sockets).
-
-```text
-               +-----------------------+
-               |  FFmpeg (POST Feed)   |
-               +-----------+-----------+
-                           |
-                           v  (Chunks)
-            +--------------+--------------+
-            |  Node.js Buffer Processing  |  --> Cập nhật Ring Buffer (2MB)
-            +--------------+--------------+
-                           |
-       +-------------------+-------------------+
-       |                   |                   |
-       v                   v                   v
-+------x------+     +------x------+     +------x------+
-| Client 1    |     | Client 2    |     | Client N    |  (GET /live/:id)
-| (VLC / TV)  |     | (VLC / TV)  |     | (VLC / TV)  |
-+-------------+     +-------------+     +-------------+
-```
+Tài liệu này lưu trữ tiến trình thực hiện công việc, các quyết định kỹ thuật quan trọng và định hướng phát triển nhằm giúp các AI Agent tiếp theo dễ dàng tiếp quản dự án.
 
 ---
 
-## 2. Giải Pháp Ring Buffer 2MB (Bộ Đệm Vòng)
+## 📌 1. Tổng Quan Hệ Thống & Hiện Trạng Công Nghệ
 
-### Vấn đề:
-Trong luồng MPEG-TS, các bảng dữ liệu **PAT (Program Association Table)** và **PMT (Program Map Table)** mô tả cấu trúc luồng (định dạng âm thanh, hình ảnh) là bắt buộc phải có để các bộ giải mã (player) khởi động. 
-* Nếu một client kết nối vào **giữa luồng stream** (khi FFmpeg đã phát được lâu), client đó sẽ phải đợi đến khi gói PAT/PMT tiếp theo được gửi tới mới có thể bắt đầu giải mã. Điều này gây trễ hoặc lỗi đen màn hình lúc mới kết nối.
-
-### Giải pháp:
-Server lưu trữ các chunk nhị phân mới nhất vào một mảng `buffer`.
-* Kích thước bộ đệm được giới hạn nghiêm ngặt ở mức tối đa **2MB** (khoảng vài giây dữ liệu stream).
-* Khi bộ đệm vượt quá 2MB, các chunk cũ nhất ở đầu mảng sẽ bị loại bỏ bằng phương thức `.shift()`, giải phóng bộ nhớ cho các chunk mới:
-  ```javascript
-  channel.buffer.push(chunk);
-  let currentBufferSize = channel.buffer.reduce((acc, b) => acc + b.length, 0);
-  while (currentBufferSize > 2 * 1024 * 1024 && channel.buffer.length > 0) {
-    const removed = channel.buffer.shift();
-    currentBufferSize -= removed.length;
-  }
-  ```
-* Khi client mới kết nối, toàn bộ 2MB đệm này sẽ được ghi ghi ngay lập tức (`res.write(cachedChunk)`) trước khi chuyển tiếp dữ liệu live, giúp TV nhận ngay các bảng PAT/PMT và giải mã lập tức.
+* **Tên dự án**: TV-Streaming-
+* **Môi trường**: 
+  * **Server**: Ubuntu Server `192.168.1.218` (Hardware: Intel CPU có GPU Onboard Intel HD Graphics, hỗ trợ VA-API).
+  * **Client**: Máy Windows (`192.168.1.121`) và Smart TV Samsung (chạy Tizen OS 2.4 đời 2016).
+* **Công nghệ cốt lõi**: Docker, LinuxServer Chromium Image, KasmVNC/Selkies WebRTC.
+* **Mạng truyền tải**: LAN trực tiếp (đã đo kiểm băng thông thực tế đạt tối đa **~95 Mbps** - giới hạn của Fast Ethernet 100Mbps). Latency cực thấp (1-2ms).
 
 ---
 
-## 3. Cơ Chế Chống Rò Rỉ Bộ Nhớ (Leak Prevention)
+## 🕒 2. Lịch Sử Cập Nhật & Các Quyết Định Kỹ Thuật (Agent Handoff Log)
 
-### A. Quản lý Vòng đời Client (GET Client Lifecycle)
-Khi một client ngắt kết nối (ví dụ tắt VLC hoặc chuyển kênh trên TV), đối tượng kết nối `res` phải được dọn dẹp để bộ gom rác (Garbage Collector) của Node.js giải phóng RAM:
-* Lắng nghe sự kiện `'close'` của Request:
-  ```javascript
-  req.on('close', () => {
-    channel.clients.delete(res);
-    // Nếu không còn feed phát và không còn client nào xem, xóa kênh khỏi bộ nhớ
-    if (channel.clients.size === 0 && !channel.feedReq) {
-      channels.delete(channelId);
-    }
-  });
-  ```
-* Điều này ngăn chặn việc tích lũy các đối tượng kết nối chết (dead connections) trong Set `clients`.
+### Phiên làm việc: 2026-06-16 (Chiều)
+* **Quyết định 1: Dọn dẹp & Tối giản hóa dự án (Xóa bỏ MPEG-TS Relay Server)**:
+  * *Bối cảnh*: Ban đầu hệ thống chạy song song 2 phương án: (1) MPEG-TS over HTTP Relay Server (`server.js` Node.js) nhận feed từ FFmpeg và phát đi; (2) Trình duyệt ảo Docker Chromium (Selkies/KasmVNC).
+  * *Hành động*: Nhận thấy nhu cầu chỉ tập trung vào trình duyệt ảo, tôi đã dừng container `tv-streaming-server` (cổng `8000`), xóa thư mục `/home/spotlighter/tv-streaming` trên server, và xóa toàn bộ mã nguồn liên quan đến MPEG-TS ở local workspace.
+  * *Kết quả*: Cấu trúc dự án hiện tại chỉ còn duy nhất module `browser-docker/` chứa cấu hình trình duyệt ảo.
 
-### B. Dọn dẹp khi Nguồn Phát dừng (POST Feed Lifecycle)
-Khi FFmpeg dừng đẩy luồng, server cần giải phóng tất cả tài nguyên liên quan đến kênh đó:
-* Giải phóng mảng `buffer` về rỗng (`channel.buffer = []`).
-* Đóng kết nối của tất cả các client đang xem kênh đó một cách chủ động (`client.end()`).
-* Xóa kênh ra khỏi Map `channels` toàn cục:
-  ```javascript
-  function cleanupChannelFeed(channelId) {
-    const channel = channels.get(channelId);
-    if (channel) {
-      channel.feedReq = null;
-      channel.buffer = [];
-      for (const client of channel.clients) {
-        try { client.end(); } catch (e) {}
-      }
-      channel.clients.clear();
-      channels.delete(channelId);
-    }
-  }
-  ```
+* **Quyết định 2: Tối ưu hóa hiệu năng WebRTC (Xử lý hiện tượng giật hình nhẹ - Micro-Stuttering)**:
+  * *Bối cảnh*: Chạy luồng WebRTC 1080p 60 FPS ở bitrate `25 Mbps` và `CRF=20` trên mạng LAN gây ra hiện tượng giật hình nhẹ.
+  * *Chẩn đoán*: Đo tốc độ bằng `iperf3` phát hiện mạng LAN bị nghẽn ở giới hạn vật lý **95 Mbps** (do router hoặc cáp mạng). Bitrate 25 Mbps chiếm hơn 26% băng thông, kết hợp burst packets của WebRTC gây ra **Bufferbloat** (nghẽn hàng đợi trên router). Đồng thời, nén 60 FPS ở độ phân giải Full HD làm quá tải nhẹ bộ mã hóa GPU Intel.
+  * *Khắc phục*: Thay đổi cấu hình trong [browser-docker/docker-compose.yml](file:///d:/TV-Streaming-/browser-docker/docker-compose.yml):
+    * Hạ tốc độ khung hình từ 60 FPS xuống **50 FPS** (`SELKIES_FRAMERATE=50`) để giảm tải 17% công việc nén cho GPU.
+    * Hạ bitrate từ 25 Mbps xuống **20 Mbps** (`SELKIES_VIDEO_BITRATE=20`) để tránh Bufferbloat mạng 100Mbps.
+    * Đặt hệ số nén chất lượng cao **CRF=21** (`SELKIES_H264_CRF=21`) để tối ưu hóa độ nét của ảnh và chữ.
+  * *Kết quả*: Hệ thống đã được Recreate trên server, chạy mượt mà 50 FPS không còn giật lag.
 
-### C. Ngăn chặn tràn bộ đệm ghi (Backpressure)
-Trong trường hợp client có kết nối mạng quá chậm, không kịp tiêu thụ dữ liệu nhị phân gửi đến, Node.js sẽ lưu các chunk này vào hàng đợi ghi (writable buffer) trong RAM. 
-* Hệ thống sử dụng cơ chế bảo vệ khối `try-catch` khi ghi dữ liệu. Nếu client xảy ra lỗi ghi hoặc mất kết nối ngầm, client đó sẽ lập tức bị loại khỏi danh sách phát sóng để tránh phình to hàng đợi ghi trong RAM của server.
+* **Quyết định 3: Khắc phục lỗi giải mã video nguồn (YouTube CPU Bottleneck)**:
+  * *Bối cảnh*: Khi phát video YouTube trong trình duyệt ảo, YouTube gửi định dạng VP9/AV1 khiến CPU của server bị quá tải do phải giải mã phần mềm (software decoding).
+  * *Khắc phục*: Hướng dẫn người dùng cài đặt extension **enhanced-h264ify** trong Chromium ảo, tích chọn chặn VP8/VP9/AV1 để ép YouTube gửi định dạng **H.264** (được GPU Intel giải mã phần cứng VA-API mượt mà).
 
 ---
 
-## 4. Tối Ưu Hóa & Cấu Hình Docker Chromium (Browser Stream Optimization)
+## 🚀 3. Định Hướng Trải Nghiệm (Samsung SmartView Integration)
 
-Ghi nhận phiên làm việc ngày **16/06/2026** về việc thiết lập và tối ưu hóa hệ thống trình duyệt ảo Docker Chromium (Selkies/KasmVNC) chạy trên Ubuntu Server `ubuntuserver01`.
-
-### A. Kích Hoạt GPU Hardware Acceleration (VA-API Zero-Copy)
-* **Vấn đề**: Trình duyệt ảo mặc định sử dụng gói driver `intel-media-va-driver` (bản DFSG - Free), không hỗ trợ tính năng mã hóa phần cứng H.264 khiến hệ thống bị ép chạy mã hóa bằng CPU, gây giật lag và hao tổn RAM/CPU cực lớn.
-* **Giải pháp**: 
-  1. Tạo script khởi động tự động `/config/custom-cont-init.d/install-nonfree-drivers.sh` để tự động cài đặt driver bản đầy đủ: `intel-media-va-driver-non-free`.
-  2. Bổ sung cấu hình volume trong `docker-compose.yml` để kích hoạt script khởi động:
-     ```yaml
-     volumes:
-       - ./config:/config
-       - ./config/custom-cont-init.d:/custom-cont-init.d:ro
-     ```
-* **Kết quả**: GPU Intel HD Graphics đảm nhận toàn bộ việc nén luồng WebRTC trực tiếp từ bộ nhớ đồ họa (**Zero-Copy**), giảm tải CPU về 0-2%.
-
-### B. Thiết Lập Độ Phân Giải & Băng Thông LAN (1080p 60fps)
-* **Khóa cứng độ phân giải Full HD**: Thiết lập `SELKIES_MANUAL_WIDTH=1920`, `SELKIES_MANUAL_HEIGHT=1080` và `SELKIES_IS_MANUAL_RESOLUTION_MODE=true` để tránh crash bộ mã hóa phần cứng do các độ phân giải co giãn không chuẩn của client.
-* **Tối ưu băng thông WebRTC**: 
-  * `SELKIES_VIDEO_BITRATE=25` (25 Mbps) và `SELKIES_H264_CRF=20` để luồng truyền tải video mượt mà, không bị vỡ hạt trên mạng LAN.
-  * Tối ưu hóa Chromium flags thông qua `CHROME_CLI` để tự động kích hoạt GPU decoding (`VaapiVideoDecoder`) và tắt giới hạn chuyển động cho cuộn mượt (smooth scroll).
-
-### C. Kết Quả Đo Tốc Độ Mạng (iperf3)
-* **Mạng LAN (`192.168.1.218`)**: Bị timeout do máy Windows Client (`10.16.237.146`) và Server (`192.168.1.218`) nằm ở 2 dải mạng/router khác nhau.
-* **Mạng Tailscale (`100.80.180.36`)**: Kết nối thành công nhưng băng thông bị nghẽn ở mức **3.56 Mbps** do kết nối bị chuyển hướng qua **Tailscale Relay (DERP)** thay vì kết nối P2P trực tiếp.
-* **Giải pháp**: Cần kết nối máy Windows chung một cục router Wi-Fi với server để có IP `192.168.1.x`, giúp truyền dữ liệu trực tiếp LAN cực kỳ mượt mà.
+* **Quyết định ngày 16/06/2026**: Hủy bỏ phương án phát triển Tizen App (bao gồm cả đóng gói `.wgt` và dựng Web Portal LAN).
+* **Lý do**: Lõi trình duyệt của TV Samsung cũ (Tizen 2.4 - 2016) là Chromium 38 (năm 2014) quá lạc hậu, không tương thích với bộ thư viện WebRTC/JS hiện đại của KasmVNC. Việc cài đặt app độc lập hoặc bypass SSL qua HTTP vừa phức tạp, vừa không ổn định.
+* **Giải pháp thay thế**: Sử dụng tính năng truyền màn hình không dây **Samsung SmartView** (hoặc Miracast) từ máy tính/điện thoại lên TV.
+* **Ưu điểm**:
+  * Đơn giản, không cần cài đặt phần mềm phụ lên TV.
+  * Tận dụng được trình duyệt ảo Chromium đã tối ưu hóa mượt mà (50 FPS, 20 Mbps, GPU Intel VA-API) đang chạy ổn định trên Server `192.168.1.218:8086`.
+  * PC/Điện thoại đóng vai trò là remote điều khiển mượt mà, TV làm màn hình phát lớn.

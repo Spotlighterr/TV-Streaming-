@@ -1,0 +1,11 @@
+{
+  "name": "tv-streaming-relay",
+  "version": "1.0.0",
+  "description": "MPEG-TS Live Stream Relay Server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {},
+  "private": true
+}

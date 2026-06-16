@@ -1,0 +1,19 @@
+services:
+  chromium:
+    image: lscr.io/linuxserver/chromium:latest
+    container_name: browser-chromium
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Ho_Chi_Minh
+      - TITLE=Docker Chromium
+      - SELKIES_FRAMERATE=30
+    volumes:
+      - ./config:/config
+    ports:
+      - 8085:3000
+      - 8086:3001
+    shm_size: 1gb
+    restart: unless-stopped

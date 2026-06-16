@@ -90,3 +90,51 @@ Hệ thống mở 2 cổng kết nối chính trên Server:
 ## ⚠️ Lưu ý quan trọng về mạng truyền dẫn
 * Tránh sử dụng Tailscale qua máy chủ trung gian (Relay/DERP) vì băng thông bị bóp dưới 4 Mbps sẽ gây giật lag.
 * Hãy kết nối thiết bị của bạn chung router Wi-Fi với server (nhận IP dải `192.168.1.x`) để đi trực tiếp qua mạng LAN tốc độ cao (100 - 1000 Mbps) giúp stream mượt mà nhất.
+
+---
+
+# 📺 PHẦN 3: Hướng Dẫn Triển Khai App Cho Samsung Tizen TV
+
+Hướng dẫn này giúp bạn tự đóng gói hệ thống (Relay Server và Browser Docker) thành một ứng dụng chạy trực tiếp trên Samsung Smart TV sử dụng hệ điều hành Tizen OS.
+
+## 1. Bản chất của Tizen App trên Samsung TV
+* Mọi ứng dụng trên Tizen TV thực chất là một ứng dụng Web (HTML5/CSS/JS) được đóng gói kèm tệp cấu hình `config.xml` và ký chứng chỉ bảo mật dưới dạng tệp tin `.wgt` (Widget).
+
+## 2. Kịch Bản Đóng Gói
+* **Kịch bản 1: Mở thẳng trình duyệt ảo (KasmVNC)**: Cấu hình tệp `config.xml` trỏ trực tiếp liên kết khởi động tới URL trình duyệt ảo của Docker Server:
+  ```xml
+  <content src="https://192.168.1.218:8086" />
+  ```
+* **Kịch bản 2: Thiết kế trang Portal tĩnh (Nút bấm chọn nguồn)**: Tạo trang `index.html` chứa các nút bấm lớn trỏ vào các link tương ứng.
+  * *Nút Browser*: Mở URL `https://192.168.1.218:8086`.
+  * *Nút Kênh TV*: Sử dụng API trình phát video mặc định của Tizen (`webapis.avplay`) trỏ vào luồng MPEG-TS `http://192.168.1.218:8000/live/test`.
+
+## 3. Các Bước Đóng Gói Với Tizen Studio SDK
+1. **Cài đặt Tizen Studio**: Tải xuống Tizen Studio SDK từ trang chủ Samsung Developer và cài thêm gói **TV Extension**.
+2. **Tạo Dự Án mới**: Chọn *New Tizen Project -> Template -> TV -> Web Application -> Basic Project*.
+3. **Cấu hình `config.xml`**:
+   * Cho phép kết nối mạng LAN/Internet:
+     ```xml
+     <access origin="*" subdomains="true"/>
+     <tizen:privilege name="http://tizen.org/privilege/internet"/>
+     ```
+   * Bật hỗ trợ các phím trên Remote (Mũi tên, OK, Back):
+     ```xml
+     <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+     ```
+4. **Tạo chứng chỉ ký (Certificate Manager)**:
+   * Đăng nhập tài khoản Samsung Developer.
+   * Tạo chứng chỉ cá nhân (Author Certificate) và chứng chỉ thiết bị (Distributor Certificate).
+5. **Biên dịch**: Chuột phải vào project -> Chọn **Build Package** để xuất ra tệp `TizenApp.wgt`.
+
+## 4. Cách Cài Đặt (Deploy) Lên Samsung TV Thực Tế
+1. **Bật Developer Mode trên TV**:
+   * Kết nối TV Samsung chung một mạng LAN/Wi-Fi với máy tính lập trình.
+   * Mở kho ứng dụng **Apps** trên TV.
+   * Nhấn chuỗi số **`1 2 3 4 5`** trên Remote để hiện bảng Developer Mode.
+   * Chuyển trạng thái sang **ON**, nhập **IP của máy tính lập trình** vào ô Host IP.
+2. **Khởi động lại TV**:
+   * Nhấn giữ nút Nguồn trên Remote khoảng 5-10 giây cho đến khi TV tắt hẳn và hiện logo khởi động lại của Samsung.
+3. **Kết nối & Cài đặt từ Tizen Studio**:
+   * Mở **Device Manager** trong Tizen Studio -> Quét tìm TV Samsung qua IP nội bộ và chuyển trạng thái sang **Connect**.
+   * Chuột phải vào dự án của bạn -> Chọn **Run As -> Tizen TV Web Application**. Ứng dụng sẽ tự động được truyền qua LAN và cài đặt lên TV.

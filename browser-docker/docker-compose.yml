@@ -9,7 +9,7 @@ services:
       - PGID=1000
       - TZ=Asia/Ho_Chi_Minh
       - TITLE=Docker Chromium
-      - SELKIES_FRAMERATE=30
+      - SELKIES_FRAMERATE=60
     volumes:
       - ./config:/config
     ports:
